@@ -1,0 +1,23 @@
+FROM debian:bookworm-slim
+# сетапим систему
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libasio-dev \
+    git \
+    curl \
+    iputils-ping \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# докачиваем зависимости (веб-фреймворк)
+RUN git clone --depth 1 https://github.com/CrowCpp/Crow.git /crow
+
+COPY src/ /app/src/
+
+# собираем
+RUN g++ -I/crow/include src/main.cpp -o server -lpthread
+
+EXPOSE 5000
+
+CMD ["./server"]
