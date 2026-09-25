@@ -51,7 +51,16 @@ std::string execCommandSafe(const std::string& cmd)
         dup2(pipefd[1], STDERR_FILENO);
         close(pipefd[1]); 
 
-        execlp("ping", "ping", "-c", "3", cmd.c_str(), (char *)nullptr);
+        char* const argv[] = 
+        {
+            const_cast<char*>("ping"),
+            const_cast<char*>("-c"),
+            const_cast<char*>("3"),
+            const_cast<char*>(cmd.c_str()),
+            nullptr
+        };
+
+        execvp("ping", argv);
 
         exit(EXIT_FAILURE);
     }
