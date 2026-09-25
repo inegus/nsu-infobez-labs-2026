@@ -4,8 +4,14 @@
 #include <memory>
 #include <stdexcept>
 #include <regex>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
 
 //Вспомогательные функции
+
+//несейвовый резолвинг хоста
 std::string execCommand(const std::string& cmd) 
 {
     std::array<char, 128> buffer;
@@ -25,6 +31,49 @@ std::string execCommand(const std::string& cmd)
     return result;
 }
 
+//сейвовый резолвинг хоста 
+std::string execCommandSafe(const std::string& cmd)
+{
+    int pipefd[2];
+    if (pipe(pipefd) == -1)
+    {
+        throw std::runtime_error("error pipe()");
+    }
+    pid_t pid = fork();
+    if (pid == -1)
+    {
+        throw std::runtime_error("error fork()");
+    }
+    if (pid == 0)
+    {//родительский
+        close(pipefd[0]); 
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[1]); 
+
+        execlp("ping", "ping", "-c", "3", cmd.c_str(), (char *)nullptr);
+
+        exit(EXIT_FAILURE);
+    }
+    else
+    { //дочерний
+        close(pipefd[1]);
+        
+        std::string result;
+        char buffer[128];
+        ssize_t count;
+        
+        while ((count = read(pipefd[0], buffer, sizeof(buffer))) > 0) {
+            result.append(buffer, count);
+        }
+        close(pipefd[0]);
+
+        int status;
+        waitpid(pid, &status, 0);
+
+        return result; 
+    }
+}
 bool isValidHost(const std::string& host) 
 {
     std::regex hostRegex("^[a-zA-Z0-9.-]+$");
@@ -83,9 +132,9 @@ int main(int argc, char* argv[])
         }
         
         try {
-            // host подставляется как аргумент при вызове команды
-            std::string command = "ping -c 3 '" + host + "'";
-            std::string output = execCommand(command);
+            // host формируется только из ip-адреса целевого хоста
+            std::string command = host;
+            std::string output = execCommandSafe(command);
             
             crow::json::wvalue result;
             result["status"] = "success";
